@@ -15,6 +15,7 @@ export const TUNING = {
   threshold: [55, 90],
   thresholdBurned: [80, 100],
   leakedShare: 0.3,
+  burnedShare: 0.25,
 
   // per-second rates
   takeRate: 12,

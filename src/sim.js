@@ -2,6 +2,8 @@
 // No DOM access. Functions mutate the state they are given and return it.
 // Reads tunables only from the `tuning` object passed to createRun.
 
+import { generateMark, visibleTags, updateTell } from './marks.js';
+
 const LOG_SIZE = 6;
 const EPS = 1e-9;
 
@@ -12,10 +14,6 @@ export function nextRandom(state) {
   t = Math.imul(t ^ (t >>> 15), t | 1);
   t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-}
-
-function between(state, [lo, hi]) {
-  return lo + (hi - lo) * nextRandom(state);
 }
 
 // ---- helpers ----
@@ -59,31 +57,11 @@ function freeSlot(state, slot) {
   state.refillTimers[slot] = state.tuning.refillSeconds;
 }
 
-// Stub mark generator. Unit 2 replaces this with marks.js + content.js.
-function generateMark(state) {
-  const t = state.tuning;
-  const w = t.bankrollBandWeights;
-  const r = nextRandom(state);
-  const band = r < w.low ? 'low' : r < w.low + w.mid ? 'mid' : 'high';
-  const leaked = nextRandom(state) < t.leakedShare;
-  const id = state.nextMarkId++;
-  return {
-    id,
-    name: `Mark #${id}`,
-    hook: `Stub hook (${band} bankroll)`,
-    tags: [],
-    status: 'cold',
-    take: 0,
-    suspicion: 0,
-    threshold: between(state, t.threshold),
-    bankroll: between(state, t.bankroll[band]),
-    greed: between(state, t.greed),
-    tellBand: 'calm',
-    convincerPaid: 0,
-    shill: false,
-    leaked,
-    pitch: null,
-  };
+function makeMark(state) {
+  const mark = generateMark(() => nextRandom(state), state.tuning);
+  mark.id = state.nextMarkId++;
+  mark.tags = visibleTags(mark, state.player.intel);
+  return mark;
 }
 
 // ---- public API ----
@@ -154,6 +132,7 @@ export function tick(state, dtSeconds) {
 
 function stepOnce(state, dt) {
   const t = state.tuning;
+  const rand = () => nextRandom(state);
   state.player.clock += dt;
 
   for (let slot = 0; slot < state.board.length; slot++) {
@@ -163,8 +142,13 @@ function stepOnce(state, dt) {
       state.refillTimers[slot] -= dt;
       if (state.refillTimers[slot] <= EPS) {
         state.refillTimers[slot] = 0;
-        state.board[slot] = generateMark(state);
+        state.board[slot] = makeMark(state);
       }
+      continue;
+    }
+    mark.tags = visibleTags(mark, state.player.intel);
+    if (mark.status === 'cold') {
+      updateTell(mark, rand, t, dt);
       continue;
     }
     if (mark.status !== 'active') continue;
@@ -198,5 +182,6 @@ function stepOnce(state, dt) {
 
     // 4. Tell band.
     mark.tellBand = bandFor(mark.suspicion / mark.threshold);
+    updateTell(mark, rand, t, dt);
   }
 }
