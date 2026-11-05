@@ -10,7 +10,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
 createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
-  const file = join(ROOT, path.endsWith('/') ? join(path, 'index.html') : path);
+  const file = join(ROOT, /[\\/]$/.test(path) ? join(path, 'index.html') : path);
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
   try {
     const body = await readFile(file);
