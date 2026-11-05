@@ -1,3 +1,29 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Long Con</title><link rel="stylesheet" href="style.css"></head>
-<body><main id="app">Long Con (UI arrives in Unit 4)</main><script type="module" src="src/main.js"></script></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Long Con</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app"><p class="boot">DIALING&hellip;</p></main>
+<script type="module" src="src/main.js"></script>
+<script>
+  // Chrome (and some others) refuse ES modules on file://. Module scripts run
+  // before the load event, so if the game hasn't booted by then, load the
+  // classic-script bundle of the same source instead.
+  window.addEventListener('load', function () {
+    if (window.__longConBooted) return;
+    var s = document.createElement('script');
+    s.src = 'long-con.bundle.js';
+    s.onerror = function () {
+      document.getElementById('app').innerHTML =
+        '<div class="boot-fail"><h2>NO DIAL TONE</h2><p>The game would not load.' +
+        ' Run <code>npm run serve</code> in the game folder and open <code>http://localhost:8080</code>.</p></div>';
+    };
+    document.body.appendChild(s);
+  });
+</script>
+</body>
+</html>

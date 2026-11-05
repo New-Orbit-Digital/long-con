@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "serve": "node scripts/serve.js",
+    "bundle": "node scripts/bundle.js"
   }
 }
