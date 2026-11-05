@@ -2,7 +2,7 @@
 
 A 1980s boiler-room short-con incremental game. Vanilla HTML, CSS and JavaScript (ES modules), no build step, no dependencies.
 
-Unit 1: the sim core (`src/tuning.js`, `src/sim.js`). Unit 2: marks (`src/marks.js`) and flavor text (`src/content.js`). Unit 3: the player verbs (`src/sim.js`). Unit 4: the screen (`index.html`, `style.css`, `src/ui.js`, `src/main.js`).
+Unit 1: the sim core (`src/tuning.js`, `src/sim.js`). Unit 2: marks (`src/marks.js`) and flavor text (`src/content.js`). Unit 3: the player verbs (`src/sim.js`). Unit 4: the screen (`index.html`, `style.css`, `src/ui.js`, `src/main.js`). Unit 5: the playtest harness (`scripts/playtest.js`).
 
 ## Run
 
@@ -69,6 +69,30 @@ Every tunable lives in `src/tuning.js` as one `TUNING` object. `sim.js` reads on
 - `generateMark(rng, tuning)` returns a cold mark (`id` is assigned by the sim). `rng` is a `() => [0, 1)` function; the sim passes one backed by `state.rng`. Rolls a bankroll band by `bankrollBandWeights`, a bankroll in that band, a hook from the same band, `greed`, and `threshold` (from `thresholdBurned` for burned marks). Hidden flags: `leaked` (`leakedShare`) and `burned` (`burnedShare`).
 - `visibleTags(mark, intel)` returns the tags the player can see: `leaked` while `intel.hackedFinancials` is held, `burned` while `intel.suckerList` is held (held = truthy, or > 0 if a number). The sim recomputes `mark.tags` every step; Unit 3 sets the Intel.
 - `refreshTell` / `updateTell` keep `mark.tell` current: a new phrase on tell-band change or every `tellRefreshSeconds`, drawn from an adjacent band with probability `tellNoise`, never the same phrase twice in a row.
+
+## Playtest harness
+
+`npm run playtest` (or `node scripts/playtest.js`) plays three scripted strategies headlessly against the sim. Each pitches every cold mark with *Sure thing* the moment it appears and buys nothing else (no convincers, shills or Intel); they differ only in when they cash out:
+
+- `uneasy`: cash out the moment a mark's tell band reaches uneasy.
+- `wary`: cash out the moment it reaches wary.
+- `never`: never cash out.
+
+Each strategy runs seeds 1..50 for 900 seconds of sim time (stepping at `tickSeconds`) or until Heat ends the run. Flags: `--strategy <name>` runs one strategy, `--verbose` adds a per-seed row (Take, seconds, bolts, cash-outs, Heat), `--seconds N` and `--seeds N` override the defaults. The module exports `runStrategy(name, seed, seconds, tuning)` and `summarize(rows)` (plus `runAll`, `main`, `parseArgs`) so tests can call it.
+
+Output with the default tuning (2026-11-04):
+
+```
+Long Con playtest: seeds 1..50, 900s of sim time, tick 0.25s, "Sure thing" only, nothing bought.
+
+strategy  median Take  mean Take  median secs  median bolts  ended by Heat
+--------  -----------  ---------  -----------  ------------  -------------
+uneasy        $28,832    $28,852          900             0             0%
+wary           $7,710     $7,694        211.4             0           100%
+never              $0         $0         80.5             7           100%
+```
+
+**Finding: waiting is not rewarded under the default tuning.** `wary` banks less than a third of what `uneasy` does. Bolts are not the problem (both have a median of 0). The cost is Heat: every wary cash-out adds `heatPerLateCashout` (4), so 25 cash-outs reach the ceiling of 100 at about 200s, every run. `uneasy` never pays late-cash-out Heat and plays the full 900s. `never` lets every mark bolt and is out in about 80s. Per issue #5, tuning was left as it is; the acceptance check is marked `todo` in `test/playtest.test.js` with these numbers.
 
 ## Verification
 
@@ -188,4 +212,50 @@ ok 28 - log keeps the last 6 lines and the run-end summary still works
 # tests 28
 # pass 28
 # fail 0
+```
+
+### Unit 5
+
+- **Date:** 2026-11-04
+- **Command:** `npm test` (`node --test`), Node v22.23.4; and `node scripts/playtest.js`
+- **Result:** PASS with one TODO. 33 tests (5 new in `test/playtest.test.js`, 28 from Units 1–4): 32 pass, 0 fail, 1 todo. The todo is the acceptance check "wary out-earns uneasy on median Take", which **FAILS** with the default tuning (wary $7,710 vs uneasy $28,832 median Take). It is marked `todo` instead of being tuned, as issue #5 asks. The other two checks pass: the table prints, and `never` ends 100% of runs by Heat.
+
+```
+ok 1 - content meets the minimum counts
+ok 2 - 1,000 marks from one seed are reproducible
+ok 3 - every rolled stat falls inside its tuning range
+ok 4 - visible tags show only while the matching Intel is held
+ok 5 - every band can draw a phrase, from its own pool when noise is off
+ok 6 - tell noise draws only from the true band or an adjacent one
+ok 7 - no two consecutive refreshes on one mark repeat
+ok 8 - updateTell refreshes on band change and every tellRefreshSeconds
+ok 9 - sim wires the generator and refreshes tells in the tick loop
+ok 10 - the playtest table prints a row per strategy
+ok 11 - never ends every run by Heat
+not ok 12 - wary out-earns uneasy on median Take # TODO FAILS with default tuning: wary median Take $7,710 (ends by Heat 100%, median 211.4s) vs uneasy $28,832 (0%, 900s)
+ok 13 - runStrategy is deterministic per seed and summarize computes medians
+ok 14 - flags: --strategy, --verbose, --seconds, --seeds
+ok 15 - board starts as boardSize empty slots and fills with cold marks
+ok 16 - mark with threshold 60, suspicionRate 2.2, multipliers 1.0 bolts on the predicted tick (±1)
+ok 17 - heat never decreases across 10,000 ticks of random actions
+ok 18 - cashOut banks exactly the mark take and frees the slot
+ok 19 - late cashOut (wary or above) adds heatPerLateCashout
+ok 20 - same seed produces identical state after 1,000 ticks
+ok 21 - rendered run never shows hidden stats when no Intel is held
+ok 22 - the LEAKED chip and revealed bankroll appear only while hacked financials is held
+ok 23 - ?seed=42 produces the same opening board twice
+ok 24 - verb buttons follow status and affordability
+ok 25 - ticker shows the last 6 lines and the game-over overlay shows the summary
+ok 26 - long-con.bundle.js (file:// fallback) is up to date with src/
+ok 27 - convincer raises bankroll exactly once; a second call is refused and charges nothing
+ok 28 - a shill's wage drains per tick and stops when unassigned
+ok 29 - shills unassign automatically when cash cannot cover the wage
+ok 30 - Intel expires at intelDuration; leaked tags show only while hacked financials is held
+ok 31 - a tag-matched pitch out-earns the same pitch unmatched over 100 ticks by the bonus ratio
+ok 32 - pitch takes a name or an index; bad pitches and non-cold marks are refused
+ok 33 - log keeps the last 6 lines and the run-end summary still works
+# tests 33
+# pass 32
+# fail 0
+# todo 1
 ```
